@@ -18,7 +18,7 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 public class TopkCommonWords {
 
 	// First Mapper - will output (word-text-i , 1)
-    public static class TokenizerMapper extends Mapper<Object, Text, Text, IntWritable> {
+	public static class TokenizerMapper1 extends Mapper<Object, Text, CompositeKey, IntWritable> {
 
         private final static IntWritable one = new IntWritable(1);
         private Text word = new Text();
@@ -27,15 +27,16 @@ public class TopkCommonWords {
             StringTokenizer itr = new StringTokenizer(value.toString());
             while (itr.hasMoreTokens()) {
                 word.set(itr.nextToken());
-                context.write(word, one);
+				CompositeKey cKey = new CompositeKey(word, 1);
+				context.write(cKey, one);
             }
         }
     }
 
-    public static class IntSumReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
+	public static class IntSumReducer extends Reducer<CompositeKey, IntWritable, CompositeKey, IntWritable> {
         private IntWritable result = new IntWritable();
 
-        public void reduce(Text key, Iterable<IntWritable> values, Context context)
+		public void reduce(CompositeKey key, Iterable<IntWritable> values, Context context)
                 throws IOException, InterruptedException {
             int sum = 0;
             for (IntWritable val : values) {
@@ -46,26 +47,66 @@ public class TopkCommonWords {
         }
     }
 
+	public static class TokenizerMapper2 extends Mapper<Object, Text, CompositeKey, IntWritable> {
+
+		private final static IntWritable one = new IntWritable(1);
+		private Text word = new Text();
+
+		public void map(Object key, Text value, Context context) throws IOException, InterruptedException { // i think
+																											// context
+																											// is an
+																											// IntWritable
+			StringTokenizer itr = new StringTokenizer(value.toString());
+			while (itr.hasMoreTokens()) {
+				word.set(itr.nextToken());
+				CompositeKey cKey = new CompositeKey(word, 2);
+				context.write(cKey, one);
+			}
+		}
+	}
+
     public static void main(String[] args) throws Exception {
         Configuration conf = new Configuration();
         Job job = Job.getInstance(conf, "word count");
-        job.setJarByClass(WordCount.class);  //need to change this
-        job.setMapperClass(TokenizerMapper.class);
+		job.setJarByClass(TopkCommonWords.class);
+		job.setMapperClass(TokenizerMapper1.class);
         job.setCombinerClass(IntSumReducer.class);
         job.setReducerClass(IntSumReducer.class);
-        job.setOutputKeyClass(Text.class);
+
+		job.setOutputKeyClass(CompositeKey.class);
         job.setOutputValueClass(IntWritable.class);
-		String inputPaths = ""+ args[0] + "," + args[1] + "," + args[2];
-        //FileInputFormat.addInputPath(job, new Path(args[0]));
-		FileInputFormat.addInputPaths(job, inputPaths);
-        FileOutputFormat.setOutputPath(job, new Path(args[3]));
-        System.exit(job.waitForCompletion(true) ? 0 : 1);
+
+		// String inputPaths = ""+ args[0] + "," + args[1] + "," + args[2];
+		FileInputFormat.addInputPath(job, new Path(args[0])); // input1
+		// FileInputFormat.addInputPaths(job, inputPaths);
+		FileOutputFormat.setOutputPath(job, new Path("commonwords/wc_output/counted_input_1"));
+		// System.exit(job.waitForCompletion(true) ? 0 : 1);
+		job.waitForCompletion(true);
+
+		Configuration conf2 = new Configuration();
+		Job job2 = Job.getInstance(conf, "word count");
+		job2.setJarByClass(TopkCommonWords.class);
+		job2.setMapperClass(TokenizerMapper2.class);
+		job2.setCombinerClass(IntSumReducer.class);
+		job2.setReducerClass(IntSumReducer.class);
+
+		job2.setOutputKeyClass(CompositeKey.class);
+		job2.setOutputValueClass(IntWritable.class);
+
+		FileInputFormat.addInputPath(job2, new Path(args[1])); // input2
+		FileOutputFormat.setOutputPath(job2, new Path("commonwords/wc_output/counted_input_2"));
+		job2.waitForCompletion(true);
     }
 }
 
 public class CompositeKey implements WritableComparable<CompositeKey> {
 	private String word;
 	private int source; // source is either 1 or 2 (input 1 or input 2)
+
+	public CompositeKey(String word, int source) {
+		this.word = word;
+		this.source = source;
+	}
 
 	public String getWord() {
 		return this.word;
