@@ -51,23 +51,22 @@ public class TopkCommonWords {
         }
     }
 
-	// public static class TokenizerMapper2 extends Mapper<Object, Text,
-	// CompositeKey, IntWritable> {
+	// Second Mapper - will output (word-text-i , 2)
+	public static class TokenizerMapper2 extends Mapper<Object, Text, CompositeKey, IntWritable> {
 
-	// private final static IntWritable one = new IntWritable(1);
-	// private Text word = new Text();
+		private final static IntWritable one = new IntWritable(1);
+		private Text word = new Text();
 
-	// public void map(Object key, Text value, Context context) throws IOException,
-	// InterruptedException {
-	// StringTokenizer itr = new StringTokenizer(value.toString(),
-	// "(space)\t\n\r\f");
-	// while (itr.hasMoreTokens()) {
-	// word.set(itr.nextToken());
-	// CompositeKey cKey = new CompositeKey(word.toString(), 2);
-	// context.write(cKey, one);
-	// }
-	// }
-	// }
+		public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+
+			StringTokenizer itr = new StringTokenizer(value.toString(), " \t\n\r\f");
+			while (itr.hasMoreTokens()) {
+				word.set(itr.nextToken());
+				CompositeKey cKey = new CompositeKey(word.toString(), 2);
+				context.write(cKey, one);
+			}
+		}
+	}
 
 	public static class CompositeKey implements WritableComparable<CompositeKey> {
 		private String word;
@@ -136,6 +135,7 @@ public class TopkCommonWords {
 	}
 
 	public static void main(String[] args) throws Exception {
+		/*First Mapper*/
 		Configuration conf = new Configuration();
 		Job job = Job.getInstance(conf, "word count");
 		job.setJarByClass(TopkCommonWords.class);
@@ -149,25 +149,31 @@ public class TopkCommonWords {
 		// String inputPaths = ""+ args[0] + "," + args[1] + "," + args[2];
 		FileInputFormat.addInputPath(job, new Path(args[0])); // input1
 		// FileInputFormat.addInputPaths(job, inputPaths);
-		// FileOutputFormat.setOutputPath(job, new
-		// Path("commonwords/wc_output/counted_input_1.txt"));
-		FileOutputFormat.setOutputPath(job, new Path(args[3]));
+		FileOutputFormat.setOutputPath(job, new
+		Path("commonwords/wc_output/counted_input_1.txt"));
+		// FileOutputFormat.setOutputPath(job, new Path(args[3]));
 		System.exit(job.waitForCompletion(true) ? 0 : 1);
-		// job.waitForCompletion(true);
+		job.waitForCompletion(true);
 
-		// Configuration conf2 = new Configuration();
-		// Job job2 = Job.getInstance(conf, "word count");
-		// job2.setJarByClass(TopkCommonWords.class);
-		// job2.setMapperClass(TokenizerMapper2.class);
-		// job2.setCombinerClass(IntSumReducer.class);
-		// job2.setReducerClass(IntSumReducer.class);
 
-		// job2.setOutputKeyClass(CompositeKey.class);
-		// job2.setOutputValueClass(IntWritable.class);
+		/*Second Mapper*/
+		Configuration conf2 = new Configuration();
+		Job job2 = Job.getInstance(conf2, "word count 2");
+		job2.setJarByClass(TopkCommonWords.class);
+		job2.setMapperClass(TokenizerMapper2.class);
+		job2.setCombinerClass(IntSumReducer.class);
+		job2.setReducerClass(IntSumReducer.class);
 
-		// FileInputFormat.addInputPath(job2, new Path(args[1])); // input2
-		// FileOutputFormat.setOutputPath(job2, new
-		// Path("commonwords/wc_output/counted_input_2.txt"));
-		// job2.waitForCompletion(true);
+		job2.setOutputKeyClass(CompositeKey.class);
+		job2.setOutputValueClass(IntWritable.class);
+
+		FileInputFormat.addInputPath(job2, new Path(args[1])); // input2
+		//FileOutputFormat.setOutputPath(job2, new Path(args[3]));
+		// System.exit(job2.waitForCompletion(true) ? 0 : 1);
+		FileOutputFormat.setOutputPath(job2, new
+		Path("commonwords/wc_output/counted_input_2.txt"));
+		job2.waitForCompletion(true);
+
+
 	}
 }
