@@ -1,6 +1,7 @@
 // Matric Number: A0188608N
 // Name: Li Huihui
 import java.io.DataInput;
+import java.io.DataOutput;
 import java.io.IOException;
 import java.util.StringTokenizer;
 
@@ -15,6 +16,8 @@ import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
+import com.google.common.collect.ComparisonChain;
+
 public class TopkCommonWords {
 
 	// First Mapper - will output (word-text-i , 1)
@@ -23,12 +26,12 @@ public class TopkCommonWords {
         private final static IntWritable one = new IntWritable(1);
         private Text word = new Text();
 
-        public void map(Object key, org.w3c.dom.Text value, Context context) throws IOException, InterruptedException {		//i think context is an IntWritable
+        public void map(Object key, Text value, Context context) throws IOException, InterruptedException {		//i think context is an IntWritable
 
 			StringTokenizer itr = new StringTokenizer(value.toString(), "(space)\t\n\r\f");
             while (itr.hasMoreTokens()) {
                 word.set(itr.nextToken());
-				CompositeKey cKey = new CompositeKey(word, 1);
+				CompositeKey cKey = new CompositeKey(word.toString(), 1);
 				context.write(cKey, one);
             }
         }
@@ -57,7 +60,7 @@ public class TopkCommonWords {
 			StringTokenizer itr = new StringTokenizer(value.toString(), "(space)\t\n\r\f");
 			while (itr.hasMoreTokens()) {
 				word.set(itr.nextToken());
-				CompositeKey cKey = new CompositeKey(word, 2);
+				CompositeKey cKey = new CompositeKey(word.toString(), 2);
 				context.write(cKey, one);
 			}
 		}
@@ -97,7 +100,7 @@ public class TopkCommonWords {
     }
 }
 
-public class CompositeKey implements WritableComparable<CompositeKey> {
+class CompositeKey implements WritableComparable<CompositeKey> {
 	private String word;
 	private int source; // source is either 1 or 2 (input 1 or input 2)
 
