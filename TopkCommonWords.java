@@ -23,8 +23,9 @@ public class TopkCommonWords {
         private final static IntWritable one = new IntWritable(1);
         private Text word = new Text();
 
-        public void map(Object key, Text value, Context context) throws IOException, InterruptedException {		//i think context is an IntWritable
-            StringTokenizer itr = new StringTokenizer(value.toString());
+        public void map(Object key, org.w3c.dom.Text value, Context context) throws IOException, InterruptedException {		//i think context is an IntWritable
+
+			StringTokenizer itr = new StringTokenizer(value.toString(), "(space)\t\n\r\f");
             while (itr.hasMoreTokens()) {
                 word.set(itr.nextToken());
 				CompositeKey cKey = new CompositeKey(word, 1);
@@ -52,11 +53,8 @@ public class TopkCommonWords {
 		private final static IntWritable one = new IntWritable(1);
 		private Text word = new Text();
 
-		public void map(Object key, Text value, Context context) throws IOException, InterruptedException { // i think
-																											// context
-																											// is an
-																											// IntWritable
-			StringTokenizer itr = new StringTokenizer(value.toString());
+		public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+			StringTokenizer itr = new StringTokenizer(value.toString(), "(space)\t\n\r\f");
 			while (itr.hasMoreTokens()) {
 				word.set(itr.nextToken());
 				CompositeKey cKey = new CompositeKey(word, 2);
