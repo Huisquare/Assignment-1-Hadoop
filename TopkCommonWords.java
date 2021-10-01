@@ -16,8 +16,6 @@ import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
-import jdk.javadoc.internal.doclets.formats.html.SourceToHTMLConverter;
-
 import com.google.common.collect.ComparisonChain;
 
 public class TopkCommonWords {
@@ -137,12 +135,12 @@ class CompositeKey implements WritableComparable<CompositeKey> {
 	}
 
 	@Override
-	public boolean equals(Object other) {
-		if (!(other.instanceOf(CompositeKey))) {
+	public boolean equals(Object o) {
+		if (!(o instanceof CompositeKey)) {
 			System.out.println("object is not a composite key!");
 			return false;
 		}
-
+		CompositeKey other = (CompositeKey) o;
 		if (this.word.equals(other.getWord()) && (this.source == other.getSource())) {
 			return true;
 		} else {
