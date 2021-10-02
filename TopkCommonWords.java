@@ -291,6 +291,9 @@ public class TopkCommonWords {
 		job3.setJarByClass(TopkCommonWords.class);
 		job3.setMapperClass(StopWordsMapper.class);
 		// job3.setCombinerClass(OccurenceReducer.class);
+		job3.setMapOutputKeyClass(CompositeKey.class);
+		job3.setMapOutputValueClass(IntWritable.class);
+
 		job3.setReducerClass(OccurenceReducer.class);
 
 		job3.setPartitionerClass(WordPartitioner.class);
