@@ -18,6 +18,11 @@ import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
+//for sequence file output and input formats
+import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
+import org.apache.hadoop.io.SequenceFile.CompressionType;
+import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
+
 import com.google.common.collect.ComparisonChain;
 
 //imports for reading in stop words
@@ -97,9 +102,14 @@ public class TopkCommonWords {
 		}
 
 		public void map(CompositeKey key, IntWritable value, Context context) throws IOException, InterruptedException {
-			String word = key.getWord();
-			if (!stopWords.contains(word)) {
-				context.write(key, value);
+			String word = null;
+			try {
+				word = key.getWord();
+				if (!stopWords.contains(word)) {
+					context.write(key, value);
+				}
+			} catch (NullPointerException e) {
+				System.out.println("in 3rd map: word is NULL.");
 			}
 		}
 	}
@@ -230,8 +240,14 @@ public class TopkCommonWords {
 		job.setOutputKeyClass(CompositeKey.class);
 		job.setOutputValueClass(IntWritable.class);
 
+		/*
+		 * setting outputformat to be sequence file
+		 */
+		job.setOutputFormatClass(SequenceFileOutputFormat.class);
+		SequenceFileOutputFormat.setOutputCompressionType(job, CompressionType.NONE); // no compression
+
 		FileInputFormat.addInputPath(job, new Path(args[0])); // input1
-		FileOutputFormat.setOutputPath(job, new Path("commonwords/wc_output/counted_input_1"));
+		SequenceFileOutputFormat.setOutputPath(job, new Path("./commonwords/wc_output/counted_input_1"));
 		job.waitForCompletion(true);
 
 
@@ -245,6 +261,12 @@ public class TopkCommonWords {
 
 		job2.setOutputKeyClass(CompositeKey.class);
 		job2.setOutputValueClass(IntWritable.class);
+
+		/*
+		 * setting outputformat to be sequence file
+		 */
+		job2.setOutputFormatClass(SequenceFileOutputFormat.class);
+		SequenceFileOutputFormat.setOutputCompressionType(job2, CompressionType.NONE); // no compression
 
 		FileInputFormat.addInputPath(job2, new Path(args[1])); // input2
 		FileOutputFormat.setOutputPath(job2, new Path("commonwords/wc_output/counted_input_2"));
@@ -267,7 +289,7 @@ public class TopkCommonWords {
 
 		job3.setJarByClass(TopkCommonWords.class);
 		job3.setMapperClass(StopWordsMapper.class);
-		job3.setCombinerClass(OccurenceReducer.class);
+		// job3.setCombinerClass(OccurenceReducer.class);
 		job3.setReducerClass(OccurenceReducer.class);
 
 		job3.setPartitionerClass(WordPartitioner.class);
@@ -275,8 +297,11 @@ public class TopkCommonWords {
 		job3.setOutputKeyClass(Text.class);
 		job3.setOutputValueClass(IntWritable.class);
 
-		FileInputFormat.addInputPath(job3, new Path("commonwords/wc_output")); // folder with two intermediate files
-																				// from previous 2 mapreduce jobs
+		// take in Sequence file as input
+		job3.setInputFormatClass(SequenceFileInputFormat.class);
+
+		FileInputFormat.addInputPaths(job3,
+				"./commonwords/wc_output/counted_input_1,./commonwords/wc_output/counted_input_2");
 		FileOutputFormat.setOutputPath(job3, new Path(args[3]));
 		System.exit(job3.waitForCompletion(true) ? 0 : 1);
 	}
