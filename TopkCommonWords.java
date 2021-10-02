@@ -93,7 +93,8 @@ public class TopkCommonWords {
 
 		private Set<String> stopWords;
 
-		protected void setUp(Context context) throws IOException, InterruptedException {
+		@Override
+		public void setup(Context context) throws IOException, InterruptedException {
 			Configuration conf = context.getConfiguration();
 			stopWords = new HashSet<String>();
 			for (String word : conf.get("stopwords").split(",")) {
@@ -109,7 +110,8 @@ public class TopkCommonWords {
 					context.write(key, value);
 				}
 			} catch (NullPointerException e) {
-				System.out.println("in 3rd map: word is NULL.");
+				e.printStackTrace();
+				System.exit(1);
 			}
 		}
 	}
@@ -225,6 +227,8 @@ public class TopkCommonWords {
 			System.out.println("Exception at reading in stop words");
 			System.exit(1);
 		} finally {
+			// System.out.println("Line 229: in readStopwords function, the word list is: "
+			// + wordList);
 			return wordList;
 		}
 	}
@@ -278,14 +282,11 @@ public class TopkCommonWords {
 		 * occurence (reduce)
 		 */
 		Configuration conf3 = new Configuration();
-		Job job3 = Job.getInstance(conf3, "remove and select smaller");
-
 		/* read the stopwords into memory */
 		String stopWords = readStopwords(args[2]);
 
-		System.out.println("stop words are read, the first word is: " + stopWords.split(",")[0]);
-
 		conf3.set("stopwords", stopWords);
+		Job job3 = Job.getInstance(conf3, "remove and select smaller");
 
 		job3.setJarByClass(TopkCommonWords.class);
 		job3.setMapperClass(StopWordsMapper.class);
