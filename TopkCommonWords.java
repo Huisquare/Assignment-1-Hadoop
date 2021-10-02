@@ -34,6 +34,10 @@ import java.lang.StringBuilder;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.Partitioner;
 
+//imports for grouping comparator
+import org.apache.hadoop.io.WritableComparable;
+import org.apache.hadoop.io.WritableComparator;
+
 public class TopkCommonWords {
 
 	// First Mapper - will output (word-text-i , 1)
@@ -123,10 +127,13 @@ public class TopkCommonWords {
 		public void reduce(CompositeKey key, Iterable<IntWritable> values, Context context)
 				throws IOException, InterruptedException {
 			Integer min = Integer.MAX_VALUE;
+			int counter = 1;
 			for (IntWritable val : values) {
+				System.out.println("IN 3RD REDUCER, IT IS VALUE NUMBER: " + counter);
 				if (val.get() < min) {
 					min = val.get();
 				}
+				counter++;
 			}
 			result.set(min);
 			String w = key.getWord();
@@ -142,6 +149,21 @@ public class TopkCommonWords {
 			return Math.abs(key.getWord().hashCode()) % numPartitions;
 		}
 
+	}
+
+	public static class GroupComparator extends WritableComparator {
+
+		public GroupComparator() {
+			super(CompositeKey.class, true);
+		}
+
+		@Override
+		public int compare(WritableComparable one, WritableComparable two) {
+			CompositeKey cKey1 = (CompositeKey) one;
+			CompositeKey cKey2 = (CompositeKey) two;
+
+			return cKey1.compareTo(cKey2);
+		}
 	}
 
 	public static class CompositeKey implements WritableComparable<CompositeKey> {
@@ -227,8 +249,6 @@ public class TopkCommonWords {
 			System.out.println("Exception at reading in stop words");
 			System.exit(1);
 		} finally {
-			// System.out.println("Line 229: in readStopwords function, the word list is: "
-			// + wordList);
 			return wordList;
 		}
 	}
@@ -294,9 +314,9 @@ public class TopkCommonWords {
 		job3.setMapOutputKeyClass(CompositeKey.class);
 		job3.setMapOutputValueClass(IntWritable.class);
 
-		job3.setReducerClass(OccurenceReducer.class);
-
 		job3.setPartitionerClass(WordPartitioner.class);
+		job3.setGroupingComparatorClass(GroupComparator.class);
+		job3.setReducerClass(OccurenceReducer.class);
 
 		job3.setOutputKeyClass(Text.class);
 		job3.setOutputValueClass(IntWritable.class);
