@@ -4,6 +4,8 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.StringTokenizer;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -17,6 +19,15 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 import com.google.common.collect.ComparisonChain;
+
+//imports for reading in stop words
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.lang.StringBuilder;
+
+//imports for partitioner
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.mapreduce.Partitioner;
 
 public class TopkCommonWords {
 
@@ -37,20 +48,6 @@ public class TopkCommonWords {
         }
     }
 
-	public static class IntSumReducer extends Reducer<CompositeKey, IntWritable, CompositeKey, IntWritable> {
-        private IntWritable result = new IntWritable();
-
-		public void reduce(CompositeKey key, Iterable<IntWritable> values, Context context)
-                throws IOException, InterruptedException {
-            int sum = 0;
-            for (IntWritable val : values) {
-                sum += val.get();
-            }
-            result.set(sum);
-            context.write(key, result);
-        }
-    }
-
 	// Second Mapper - will output (word-text-i , 2)
 	public static class TokenizerMapper2 extends Mapper<Object, Text, CompositeKey, IntWritable> {
 
@@ -66,6 +63,73 @@ public class TopkCommonWords {
 				context.write(cKey, one);
 			}
 		}
+	}
+
+	// Reducer for First and Second Mapper
+	public static class IntSumReducer extends Reducer<CompositeKey, IntWritable, CompositeKey, IntWritable> {
+        private IntWritable result = new IntWritable();
+
+		public void reduce(CompositeKey key, Iterable<IntWritable> values, Context context)
+                throws IOException, InterruptedException {
+            int sum = 0;
+            for (IntWritable val : values) {
+                sum += val.get();
+            }
+            result.set(sum);
+            context.write(key, result);
+        }
+    }
+
+	/**
+	 * Third Mapper Input: ((word, text_num), num_occurence) Output: ((word,
+	 * text_num), num_occurence)
+	 */
+	public static class StopWordsMapper extends Mapper<CompositeKey, IntWritable, CompositeKey, IntWritable> {
+
+		private Set<String> stopWords;
+
+		protected void setUp(Context context) throws IOException, InterruptedException {
+			Configuration conf = context.getConfiguration();
+			stopWords = new HashSet<String>();
+			for (String word : conf.get("stopwords").split(",")) {
+				stopWords.add(word);
+			}
+		}
+
+		public void map(CompositeKey key, IntWritable value, Context context) throws IOException, InterruptedException {
+			String word = key.getWord();
+			if (!stopWords.contains(word)) {
+				context.write(key, value);
+			}
+		}
+	}
+
+	public static class OccurenceReducer extends Reducer<CompositeKey, IntWritable, Text, IntWritable> {
+		private IntWritable result = new IntWritable();
+		private Text word = new Text();
+
+		public void reduce(CompositeKey key, Iterable<IntWritable> values, Context context)
+				throws IOException, InterruptedException {
+			Integer min = Integer.MAX_VALUE;
+			for (IntWritable val : values) {
+				if (val.get() < min) {
+					min = val.get();
+				}
+			}
+			result.set(min);
+			String w = key.getWord();
+			word.set(w);
+			context.write(word, result);
+		}
+	}
+
+	public static class WordPartitioner extends Partitioner<CompositeKey, NullWritable> {
+
+		@Override
+		public int getPartition(CompositeKey key, NullWritable value, int numPartitions) {
+			return Math.abs(key.getWord().hashCode()) % numPartitions;
+		}
+
 	}
 
 	public static class CompositeKey implements WritableComparable<CompositeKey> {
@@ -134,6 +198,26 @@ public class TopkCommonWords {
 		}
 	}
 
+	private static String readStopwords(String stopwordsPath) {
+		StringBuilder sb = new StringBuilder();
+		String wordList = "";
+		try {
+			BufferedReader br = new BufferedReader(new FileReader(stopwordsPath));
+			String word = br.readLine();
+
+			while (word != null) {
+				sb.append(word).append(",");
+				word = br.readLine();
+			}
+			wordList = sb.toString();
+			br.close();
+		} catch (Exception e) {
+			System.out.println("Exception at reading in stop words");
+			System.exit(1);
+		} finally {
+			return wordList;
+		}
+	}
 	public static void main(String[] args) throws Exception {
 		/*First Mapper*/
 		Configuration conf = new Configuration();
@@ -146,13 +230,8 @@ public class TopkCommonWords {
 		job.setOutputKeyClass(CompositeKey.class);
 		job.setOutputValueClass(IntWritable.class);
 
-		// String inputPaths = ""+ args[0] + "," + args[1] + "," + args[2];
 		FileInputFormat.addInputPath(job, new Path(args[0])); // input1
-		// FileInputFormat.addInputPaths(job, inputPaths);
-		FileOutputFormat.setOutputPath(job, new
-		Path("commonwords/wc_output/counted_input_1.txt"));
-		// FileOutputFormat.setOutputPath(job, new Path(args[3]));
-		System.exit(job.waitForCompletion(true) ? 0 : 1);
+		FileOutputFormat.setOutputPath(job, new Path("commonwords/wc_output/counted_input_1"));
 		job.waitForCompletion(true);
 
 
@@ -168,12 +247,38 @@ public class TopkCommonWords {
 		job2.setOutputValueClass(IntWritable.class);
 
 		FileInputFormat.addInputPath(job2, new Path(args[1])); // input2
-		//FileOutputFormat.setOutputPath(job2, new Path(args[3]));
-		// System.exit(job2.waitForCompletion(true) ? 0 : 1);
-		FileOutputFormat.setOutputPath(job2, new
-		Path("commonwords/wc_output/counted_input_2.txt"));
+		FileOutputFormat.setOutputPath(job2, new Path("commonwords/wc_output/counted_input_2"));
 		job2.waitForCompletion(true);
 
 
+		/*
+		 * MapReduce for removal of stopwords (map) and selection of smaller number of
+		 * occurence (reduce)
+		 */
+		Configuration conf3 = new Configuration();
+		Job job3 = Job.getInstance(conf3, "remove and select smaller");
+
+		/* read the stopwords into memory */
+		String stopWords = readStopwords(args[2]);
+
+		System.out.println("stop words are read, the first word is: " + stopWords.split(",")[0]);
+
+		conf3.set("stopwords", stopWords);
+
+		job3.setJarByClass(TopkCommonWords.class);
+		job3.setMapperClass(StopWordsMapper.class);
+		job3.setCombinerClass(OccurenceReducer.class);
+		job3.setReducerClass(OccurenceReducer.class);
+
+		job3.setPartitionerClass(WordPartitioner.class);
+
+		job3.setOutputKeyClass(Text.class);
+		job3.setOutputValueClass(IntWritable.class);
+
+		FileInputFormat.addInputPath(job3, new Path("commonwords/wc_output")); // folder with two intermediate files
+																				// from previous 2 mapreduce jobs
+		FileOutputFormat.setOutputPath(job3, new Path(args[3]));
+		System.exit(job3.waitForCompletion(true) ? 0 : 1);
 	}
+
 }
