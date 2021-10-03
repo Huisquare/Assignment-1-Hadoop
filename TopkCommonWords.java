@@ -45,13 +45,13 @@ import java.lang.Comparable;
 
 public class TopkCommonWords {
 
-	// First Mapper - will output (word-text-i , 1)
+	// First Mapper - will output Composite Key and count ((word, 1) , 1)
 	public static class TokenizerMapper1 extends Mapper<Object, Text, CompositeKey, IntWritable> {
 
         private final static IntWritable one = new IntWritable(1);
         private Text word = new Text();
 
-        public void map(Object key, Text value, Context context) throws IOException, InterruptedException {		//i think context is an IntWritable
+		public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
 
 			StringTokenizer itr = new StringTokenizer(value.toString(), " \t\n\r\f");
             while (itr.hasMoreTokens()) {
@@ -62,7 +62,7 @@ public class TopkCommonWords {
         }
     }
 
-	// Second Mapper - will output (word-text-i , 2)
+	// Second Mapper - will output Composite Key and count ((word, 2) , 1)
 	public static class TokenizerMapper2 extends Mapper<Object, Text, CompositeKey, IntWritable> {
 
 		private final static IntWritable one = new IntWritable(1);
@@ -80,6 +80,7 @@ public class TopkCommonWords {
 	}
 
 	// Reducer for First and Second Mapper
+	// will output CompositeKey and count ((word, text-number), count)
 	public static class IntSumReducer extends Reducer<CompositeKey, IntWritable, CompositeKey, IntWritable> {
         private IntWritable result = new IntWritable();
 
@@ -95,8 +96,10 @@ public class TopkCommonWords {
     }
 
 	/**
-	 * Third Mapper Input: ((word, text_num), num_occurence) Output: ((word,
-	 * text_num), num_occurence)
+	 * Third Mapper 
+	 * Input: ((word, text_num), num_occurence) 
+	 * Output: ((word, text_num), num_occurence) 
+	 * Function: remove stopwords
 	 */
 	public static class StopWordsMapper extends Mapper<CompositeKey, IntWritable, CompositeKey, IntWritable> {
 
@@ -118,13 +121,22 @@ public class TopkCommonWords {
 				if (!stopWords.contains(word)) {
 					context.write(key, value);
 				}
-			} catch (NullPointerException e) {
+			} catch (Exception e) {
+				System.out.println("Exception in the Third Mapper!");
 				e.printStackTrace();
 				System.exit(1);
 			}
 		}
 	}
 
+	/**
+	 * OccurenceReducer 
+	 * Input: CompositeKey and count: ((word, text_num), num_occurence) 
+	 * Output: count and word: (count, word) 
+	 * Function: select words found in both texts then 
+	 * 			 convert ((word, text_num), num_occurence) into (count, word) 
+	 * 			 sort the (count, word) using priority queue output top 20 words
+	 */
 	public static class OccurenceReducer extends Reducer<CompositeKey, IntWritable, IntWritable, Text> {
 		private IntWritable result = new IntWritable();
 		private Text word = new Text();
@@ -153,12 +165,6 @@ public class TopkCommonWords {
 				String w = key.getWord();
 				Tuple tup = new Tuple(min, w);
 				pq.add(tup);
-
-				// if (tmap.size() > 20) {
-				// if (tmap.firstKey() < min) {
-				// tmap.remove(tmap.firstEntry());
-				// }
-				// }
 
 			}
 		}
@@ -314,12 +320,14 @@ public class TopkCommonWords {
 			br.close();
 		} catch (Exception e) {
 			System.out.println("Exception at reading in stop words");
+			e.printStackTrace();
 			System.exit(1);
 		} finally {
 			return wordList;
 		}
 	}
 	public static void main(String[] args) throws Exception {
+
 		/*First Mapper*/
 		Configuration conf = new Configuration();
 		Job job = Job.getInstance(conf, "word count");
@@ -331,9 +339,7 @@ public class TopkCommonWords {
 		job.setOutputKeyClass(CompositeKey.class);
 		job.setOutputValueClass(IntWritable.class);
 
-		/*
-		 * setting outputformat to be sequence file
-		 */
+		// setting outputformat to be sequence file
 		job.setOutputFormatClass(SequenceFileOutputFormat.class);
 		SequenceFileOutputFormat.setOutputCompressionType(job, CompressionType.NONE); // no compression
 
@@ -353,9 +359,7 @@ public class TopkCommonWords {
 		job2.setOutputKeyClass(CompositeKey.class);
 		job2.setOutputValueClass(IntWritable.class);
 
-		/*
-		 * setting outputformat to be sequence file
-		 */
+		// setting outputformat to be sequence file
 		job2.setOutputFormatClass(SequenceFileOutputFormat.class);
 		SequenceFileOutputFormat.setOutputCompressionType(job2, CompressionType.NONE); // no compression
 
@@ -377,7 +381,6 @@ public class TopkCommonWords {
 
 		job3.setJarByClass(TopkCommonWords.class);
 		job3.setMapperClass(StopWordsMapper.class);
-		// job3.setCombinerClass(OccurenceReducer.class);
 		job3.setMapOutputKeyClass(CompositeKey.class);
 		job3.setMapOutputValueClass(IntWritable.class);
 
