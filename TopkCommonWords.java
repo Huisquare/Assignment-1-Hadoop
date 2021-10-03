@@ -4,6 +4,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.StringTokenizer;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -36,6 +37,11 @@ import org.apache.hadoop.mapreduce.Partitioner;
 //imports for grouping comparator
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.io.WritableComparator;
+
+//imports for priority queue
+import java.util.PriorityQueue;
+import java.util.Comparator;
+import java.lang.Comparable;
 
 public class TopkCommonWords {
 
@@ -119,9 +125,16 @@ public class TopkCommonWords {
 		}
 	}
 
-	public static class OccurenceReducer extends Reducer<CompositeKey, IntWritable, Text, IntWritable> {
+	public static class OccurenceReducer extends Reducer<CompositeKey, IntWritable, IntWritable, Text> {
 		private IntWritable result = new IntWritable();
 		private Text word = new Text();
+
+		private PriorityQueue<Tuple> pq;
+
+		@Override
+		public void setup(Context context) throws IOException, InterruptedException {
+			pq = new PriorityQueue<>(Collections.reverseOrder());
+		}
 
 		public void reduce(CompositeKey key, Iterable<IntWritable> values, Context context)
 				throws IOException, InterruptedException {
@@ -136,12 +149,64 @@ public class TopkCommonWords {
 			// only if the word is common between two files
 			// then write to the file
 			if (counter == 2) {
-				result.set(min);
+
 				String w = key.getWord();
-				word.set(w);
-				context.write(word, result);
+				Tuple tup = new Tuple(min, w);
+				pq.add(tup);
+
+				// if (tmap.size() > 20) {
+				// if (tmap.firstKey() < min) {
+				// tmap.remove(tmap.firstEntry());
+				// }
+				// }
+
 			}
 		}
+
+		@Override
+		public void cleanup(Context context) throws IOException, InterruptedException {
+
+			int counter = 0;
+
+			Tuple currTup = pq.poll();
+
+			while (currTup != null) {
+				if (counter < 20) {
+					Integer count = currTup.getCount();
+					String w = currTup.getWord();
+					word.set(w);
+					result.set(count);
+					context.write(result, word);
+				}
+				counter++;
+				currTup = pq.poll();
+			}
+		}
+	}
+
+	public static class Tuple implements Comparable<Tuple> {
+
+		Integer count;
+		String word;
+
+		public Tuple(Integer count, String word) {
+			this.count = count;
+			this.word = word;
+		}
+
+		public Integer getCount() {
+			return count;
+		}
+
+		public String getWord() {
+			return word;
+		}
+
+		public int compareTo(Tuple tup) {
+			int result = (int) (this.count - tup.getCount());
+			return result;
+		}
+
 	}
 
 	public static class WordPartitioner extends Partitioner<CompositeKey, IntWritable> {
@@ -320,8 +385,8 @@ public class TopkCommonWords {
 		job3.setGroupingComparatorClass(GroupComparator.class);
 		job3.setReducerClass(OccurenceReducer.class);
 
-		job3.setOutputKeyClass(Text.class);
-		job3.setOutputValueClass(IntWritable.class);
+		job3.setOutputKeyClass(IntWritable.class);
+		job3.setOutputValueClass(Text.class);
 
 		// take in Sequence file as input
 		job3.setInputFormatClass(SequenceFileInputFormat.class);
