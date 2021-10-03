@@ -126,15 +126,21 @@ public class TopkCommonWords {
 		public void reduce(CompositeKey key, Iterable<IntWritable> values, Context context)
 				throws IOException, InterruptedException {
 			Integer min = Integer.MAX_VALUE;
+			int counter = 0;
 			for (IntWritable val : values) {
 				if (val.get() < min) {
 					min = val.get();
 				}
+				counter++;
 			}
-			result.set(min);
-			String w = key.getWord();
-			word.set(w);
-			context.write(word, result);
+			// only if the word is common between two files
+			// then write to the file
+			if (counter == 2) {
+				result.set(min);
+				String w = key.getWord();
+				word.set(w);
+				context.write(word, result);
+			}
 		}
 	}
 
