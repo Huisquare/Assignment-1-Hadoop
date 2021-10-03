@@ -31,7 +31,6 @@ import java.io.FileReader;
 import java.lang.StringBuilder;
 
 //imports for partitioner
-import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.Partitioner;
 
 //imports for grouping comparator
@@ -127,13 +126,10 @@ public class TopkCommonWords {
 		public void reduce(CompositeKey key, Iterable<IntWritable> values, Context context)
 				throws IOException, InterruptedException {
 			Integer min = Integer.MAX_VALUE;
-			int counter = 1;
 			for (IntWritable val : values) {
-				System.out.println("IN 3RD REDUCER, IT IS VALUE NUMBER: " + counter);
 				if (val.get() < min) {
 					min = val.get();
 				}
-				counter++;
 			}
 			result.set(min);
 			String w = key.getWord();
@@ -142,10 +138,10 @@ public class TopkCommonWords {
 		}
 	}
 
-	public static class WordPartitioner extends Partitioner<CompositeKey, NullWritable> {
+	public static class WordPartitioner extends Partitioner<CompositeKey, IntWritable> {
 
 		@Override
-		public int getPartition(CompositeKey key, NullWritable value, int numPartitions) {
+		public int getPartition(CompositeKey key, IntWritable value, int numPartitions) {
 			return Math.abs(key.getWord().hashCode()) % numPartitions;
 		}
 
@@ -162,7 +158,7 @@ public class TopkCommonWords {
 			CompositeKey cKey1 = (CompositeKey) one;
 			CompositeKey cKey2 = (CompositeKey) two;
 
-			return cKey1.compareTo(cKey2);
+			return cKey1.getWord().compareTo(cKey2.getWord());
 		}
 	}
 
